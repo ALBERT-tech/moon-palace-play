@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#100e1c">
+<title>Лунный дворец — пиксельный платформер</title>
+<style>
+  :root { color-scheme: dark; --ink:#100e1c; --panel:#191527; --line:#332944; --muted:#b2a5be; --gold:#ffd18e; --paper:#fff0dd; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100svh; background:radial-gradient(ellipse at 50% 0,#241831 0,transparent 65%),var(--ink); color:var(--paper); font:15px/1.5 system-ui,sans-serif; }
+  main { max-width:1040px; margin:0 auto; padding:clamp(18px,4vw,48px) clamp(12px,3vw,30px) 28px; }
+  .hero { margin-bottom:21px; }
+  .eyebrow,.micro { font:700 11px/1.4 ui-monospace,Consolas,monospace; letter-spacing:.17em; text-transform:uppercase; }
+  .eyebrow { color:var(--gold); display:flex; align-items:center; gap:12px; }
+  .eyebrow::before { content:""; width:9px; height:9px; background:var(--gold); transform:rotate(45deg); box-shadow:0 0 14px #ffb67455; }
+  h1 { font:700 clamp(36px,7vw,76px)/1.04 Georgia,serif; letter-spacing:-.065em; margin:7px 0 8px; }
+  .hero p { margin:0; color:var(--muted); }
+  .machine { background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 24px 60px #0006; }
+  .hud,.bottom { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 16px; }
+  .level { display:flex; align-items:center; gap:8px; color:var(--gold); }
+  .level span { background:#37273a; border-radius:4px; padding:3px 5px; color:var(--gold); }
+  .progress { display:flex; align-items:center; gap:9px; color:var(--muted); }
+  .track { width:clamp(35px,9vw,96px); height:5px; background:#362a48; border-radius:6px; overflow:hidden; }
+  .track i { display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:left; background:var(--gold); }
+  .scene { position:relative; background:#221933; border-block:1px solid var(--line); }
+  canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+  .result { position:absolute; inset:0; display:grid; place-items:center; padding:8px; background:#110d1dbb; text-align:center; }
+  .result[hidden] { display:none; }
+  .result article { border:1px solid #916d66; border-radius:9px; background:#251b32; padding:clamp(12px,3vw,29px) clamp(15px,5vw,48px); }
+  .result h2 { font:700 clamp(24px,5vw,46px)/1 Georgia,serif; margin:0 0 9px; }
+  .result p { color:var(--muted); margin:0 0 12px; }
+  button { display:inline-flex; align-items:center; justify-content:center; gap:7px; font:700 13px/1 system-ui,sans-serif; min-height:42px; color:var(--paper); background:#251e35; border:1px solid #4a3a5e; border-radius:7px; padding:0 13px; cursor:pointer; touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+  button:hover { background:#362847; border-color:#7a5c89; }
+  button:focus-visible { outline:2px solid #fff0dd; outline-offset:3px; }
+  .control.is-down { transform:translateY(2px); background:#4b385a; }
+  .jump,.again { background:var(--gold); border-color:#edb778; color:#2c1b24; }
+  .jump:hover,.again:hover,.jump.is-down { background:#ffe1b5; border-color:#ffe1b5; }
+  .controls,.movement,.actions,.stats { display:flex; align-items:center; gap:7px; }
+  .controls { flex-wrap:wrap; }
+  .controls .control { touch-action:none; }
+  .movement button { min-width:44px; padding:0 10px; font-size:21px; }
+  .stats { gap:clamp(9px,2vw,20px); }
+  .hearts { color:#f99d9c; font-size:15px; letter-spacing:.1em; white-space:nowrap; }
+  kbd { font:700 10px/1.2 ui-monospace,Consolas,monospace; border:1px solid currentColor; border-radius:3px; padding:3px 5px; opacity:.72; }
+  .status { color:var(--muted); margin:0; font-size:13px; }
+  .play-bar { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; justify-content:space-between; padding:0 16px 10px; }
+  .foot { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px 18px; color:var(--muted); margin:13px 2px 0; font-size:12px; }
+  @media (max-width:600px) {
+    .bottom { padding:9px 10px; }
+    .hud { padding:8px 10px; }
+    .play-bar { padding:0 10px 9px; }
+    .control { min-height:44px; padding:0 10px; }
+  }
+  @media (max-width:760px), (pointer:coarse) { .controls kbd { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Пиксельный платформер</div>
+    <h1>Лунный дворец</h1>
+    <p>Перепрыгни проломы, взберись по лестницам и пройди мимо стражи к воротам.</p>
+  </header>
+  <section class="machine" aria-label="Игра Лунный дворец">
+    <div class="hud">
+      <div class="level micro"><span>01</span> Крыши дворца</div>
+      <div class="stats">
+        <div class="hearts" id="health" role="img" aria-label="Здоровье: 3 из 3">♥♥♥</div>
+        <div class="progress micro"><span class="track" aria-hidden="true"><i id="bar"></i></span><span id="percent" aria-label="Пройдено 0%">0%</span></div>
+      </div>
+    </div>
+    <div class="scene">
+      <canvas id="game" width="480" height="270" tabindex="-1" aria-label="Крыши дворца. Стрелки влево и вправо — бег, пробел — прыжок, вверх — парирование или подъём, вниз — спуск, Shift — укол.">Пиксельный платформер: для игры нужен браузер с поддержкой Canvas.</canvas>
+      <div class="result" id="result" hidden>
+        <article>
+          <h2>Ты добрался!</h2>
+          <p>Ворота лунного дворца открыты.</p>
+          <button class="again" id="again" type="button">Играть снова</button>
+        </article>
+      </div>
+    </div>
+    <div class="bottom">
+      <div class="controls" role="group" aria-label="Управление">
+        <div class="movement">
+          <button class="control" data-action="left" type="button" aria-label="Бежать влево" aria-keyshortcuts="ArrowLeft A">←</button>
+          <button class="control" data-action="right" type="button" aria-label="Бежать вправо" aria-keyshortcuts="ArrowRight D">→</button>
+          <button class="control" data-action="up" type="button" aria-label="Парировать или подняться" aria-keyshortcuts="ArrowUp W">↑</button>
+          <button class="control" data-action="down" type="button" aria-label="Спуститься" aria-keyshortcuts="ArrowDown S">↓</button>
+        </div>
+        <div class="actions">
+          <button class="control jump" data-action="jump" type="button" aria-keyshortcuts="Space">Прыжок <kbd>Пробел</kbd></button>
+          <button class="control" data-action="thrust" type="button" aria-keyshortcuts="Shift">Укол <kbd>Shift</kbd></button>
+        </div>
+      </div>
+      <button id="restart" type="button" aria-keyshortcuts="R">↻ Сначала</button>
+    </div>
+    <div class="play-bar"><p class="status" id="status" role="status">Подойди к стражнику. Когда над ним появится «!», держи ↑.</p></div>
+  </section>
+  <footer class="foot">
+    <span>↑ Парировать / подняться · ↓ Спуститься · Пробел — прыжок · Shift — укол</span>
+    <span>Падения: <strong id="falls">0</strong></span>
+  </footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const canvas = $('game'), ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const platforms = [
+    { x:0, end:142, y:209 }, { x:187, end:258, y:209 },
+    { x:221, end:308, y:149, deck:true }, { x:354, end:443, y:185 },
+    { x:500, end:625, y:212 }, { x:673, end:738, y:188 },
+    { x:699, end:765, y:132, deck:true }, { x:808, end:927, y:211 },
+    { x:978, end:1118, y:195 }, { x:1179, end:1370, y:209 }
+  ];
+  const ladders = [{ x:238, top:149, bottom:209 }, { x:715, top:132, bottom:188 }];
+  const posts = [
+    { x:113, y:209, min:99, max:127, hp:1 }, { x:403, y:185, min:376, max:426, hp:2 },
+    { x:600, y:212, min:583, max:612, hp:2 }, { x:884, y:211, min:851, max:908, hp:2 },
+    { x:1081, y:195, min:1045, max:1099, hp:2 }, { x:1260, y:209, min:1230, max:1280, hp:2 }
+  ];
+  const start = { x:67, y:209 }, checkpoint = { x:558, y:212 }, gate = 1299;
+  const maxCamera = platforms.at(-1).end - W;
+  const minmax = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const keys = new Set(), pointers = new Map();
+  const bindings = {
+    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+    Space:'jump', ShiftLeft:'thrust', ShiftRight:'thrust'
+  };
+  const buttons = [...document.querySelectorAll('.control')];
+  const held = action => [...keys].some(key => bindings[key] === action) || [...pointers.values()].includes(action);
+  let hero, guards, saved, falls, camera, won, flashing, shownPercent;
+  let jumpBuffer = 0, thrustBuffer = 0, ticks = 0, particles = [];
+  function say(message) { $('status').textContent = message; }
+  function showHealth() {
+    $('health').textContent = '♥'.repeat(hero.hp) + '♡'.repeat(3-hero.hp);
+    $('health').setAttribute('aria-label', `Здоровье: ${hero.hp} из 3`);
+  }
+  function spawn(at) {
+    hero = { x:at.x, y:at.y, vx:0, vy:0, ground:true, face:1, grace:5, stride:0,
+      hp:3, hurt:0, thrust:0, parry:false, ladder:null, regrab:0 };
+    camera = minmax(at.x - 144, 0, maxCamera);
+    jumpBuffer = thrustBuffer = 0;
+    showHealth();
+  }
+  function guardAt(post) { return { ...post, face:-1, state:'patrol', timer:0 }; }
+  function reset() {
+    saved = false; falls = 0; won = false; flashing = 0; particles = [];
+    guards = posts.map(guardAt);
+    $('falls').textContent = '0'; $('result').hidden = true;
+    say('Подойди к стражнику. Когда над ним появится «!», держи ↑.');
+    spawn(start); updateProgress();
+  }
+  function updateProgress() {
+    const fraction = won ? 1 : minmax((hero.x - start.x) / (gate - start.x), 0, 1);
+    const percent = Math.floor(fraction * 100);
+    if (percent !== shownPercent) {
+      shownPercent = percent;
+      $('bar').style.transform = `scaleX(${fraction})`;
+      $('percent').textContent = `${percent}%`;
+      $('percent').setAttribute('aria-label', `Пройдено ${percent}%`);
+    }
+  }
+  function paintButtons() {
+    for (const button of buttons) button.classList.toggle('is-down', held(button.dataset.action));
+  }
+  function clearInput() {
+    keys.clear(); pointers.clear(); jumpBuffer = thrustBuffer = 0; paintButtons();
+  }
+  function bufferAction(action) {
+    if (action === 'jump') jumpBuffer = 7;
+    if (action === 'thrust') thrustBuffer = 7;
+  }
+  window.addEventListener('keydown', event => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.code === 'KeyR' && !event.repeat) {
+      clearInput(); reset(); canvas.focus({ preventScroll:true }); return;
+    }
+    const action = bindings[event.code];
+    if (!action || won || (event.code === 'Space' && event.target.closest('button'))) return;
+    event.preventDefault();
+    if (!event.repeat && !held(action)) bufferAction(action);
+    keys.add(event.code); paintButtons();
+  });
+  window.addEventListener('keyup', event => { keys.delete(event.code); paintButtons(); });
+  window.addEventListener('blur', clearInput);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearInput(); });
+  for (const button of buttons) {
+    const action = button.dataset.action;
+    button.addEventListener('pointerdown', event => {
+      if (won || event.button !== 0) return;
+      event.preventDefault();
+      if (!held(action)) bufferAction(action);
+      pointers.set(event.pointerId, action);
+      button.setPointerCapture(event.pointerId); paintButtons();
+    });
+    const release = event => { pointers.delete(event.pointerId); paintButtons(); };
+    for (const name of ['pointerup','pointercancel','lostpointercapture']) button.addEventListener(name, release);
+    button.addEventListener('click', event => {
+      if (!won && event.detail === 0) bufferAction(action);
+    });
+    button.addEventListener('keydown', event => {
+      if (won || !['Space','Enter'].includes(event.code)) return;
+      event.preventDefault();
+      const token = `button:${event.code}`;
+      if (!event.repeat && !held(action)) bufferAction(action);
+      pointers.set(token, action); paintButtons();
+    });
+    window.addEventListener('keyup', event => {
+      if (pointers.delete(`button:${event.code}`)) paintButtons();
+    });
+  }
+  function restartGame() { clearInput(); reset(); canvas.focus({ preventScroll:true }); }
+  $('restart').addEventListener('click', restartGame);
+  $('again').addEventListener('click', restartGame);
+
+  function dust(x, y, color, amount) {
+    for (let i = 0; i < amount; i++) particles.push({ x, y:y-2, vx:(Math.random()-.5)*2.6, vy:-Math.random()*1.4, life:12+i*2, color });
+  }
+  function climb() {
+    const dir = Number(held('down')) - Number(held('up'));
+    if (!hero.ladder && dir && !hero.regrab && !jumpBuffer) {
+      hero.ladder = ladders.find(ladder => Math.abs(hero.x-ladder.x) <= 8 &&
+        hero.y >= ladder.top-2 && hero.y <= ladder.bottom+2 &&
+        (dir < 0 ? hero.y > ladder.top+2 : hero.y < ladder.bottom-2)) || null;
+    }
+    if (!hero.ladder) return false;
+    if (jumpBuffer > 0) {
+      hero.ladder = null; hero.regrab = 12; hero.vy = -5.4; jumpBuffer = 0;
+      return false;
+    }
+    const ladder = hero.ladder;
+    hero.x = ladder.x; hero.vx = hero.vy = hero.grace = 0;
+    hero.parry = false; hero.thrust = 0;
+    hero.y = minmax(hero.y + dir*1.8, ladder.top, ladder.bottom);
+    hero.stride += Math.abs(dir)*1.8;
+    hero.ground = (dir < 0 && hero.y === ladder.top) || (dir > 0 && hero.y === ladder.bottom);
+    if (hero.ground) { hero.ladder = null; hero.grace = 5; }
+    return true;
+  }
+  function respawn(message) {
+    say(message + (saved ? ' Ты снова у фонаря.' : ' Ты снова на первой крыше.'));
+    guards = guards.map((guard, i) => guard.hp ? guardAt(posts[i]) : guard);
+    clearInput(); spawn(saved ? checkpoint : start); flashing = 18; particles = [];
+  }
+  function combat() {
+    if (hero.hurt) hero.hurt--;
+    if (hero.thrust) hero.thrust--;
+    if (hero.ground && !hero.hurt && !hero.thrust && thrustBuffer) {
+      hero.thrust = 16; thrustBuffer = 0;
+    }
+    if (thrustBuffer) thrustBuffer--;
+    hero.parry = hero.ground && !hero.hurt && !hero.thrust && held('up');
+    const onRoof = guard => hero.ground && Math.abs(guard.y-hero.y) < 3;
+    const inFront = (facing, dx, reach) => Math.abs(dx) <= reach && dx*facing >= -3;
+    if (hero.thrust === 11 && hero.ground) {
+      const target = guards.filter(g => g.hp && onRoof(g) && inFront(hero.face,g.x-hero.x,29))
+        .sort((a,b) => Math.abs(a.x-hero.x)-Math.abs(b.x-hero.x))[0];
+      if (target) {
+        target.hp--; target.state = 'stunned'; target.timer = 24;
+        dust(target.x, target.y-12, '#fff0b9', 6);
+        say(target.hp ? 'Укол попал!' : 'Стражник побеждён.');
+      }
+    }
+    for (const guard of guards) {
+      if (!guard.hp) continue;
+      const dx = hero.x-guard.x;
+      const near = onRoof(guard) && Math.abs(dx) <= 72;
+      if (guard.state === 'patrol') {
+        if (near) guard.face = Math.sign(dx) || guard.face;
+        if (near && Math.abs(dx) <= 24) {
+          guard.state = 'windup'; guard.timer = 26;
+        } else {
+          const speed = near ? 1.0 : .38;
+          guard.x = minmax(guard.x + guard.face*speed,guard.min,guard.max);
+          if (!near && (guard.x === guard.min || guard.x === guard.max)) guard.face *= -1;
+        }
+        continue;
+      }
+      if (--guard.timer > 0) continue;
+      if (guard.state !== 'windup') { guard.state = 'patrol'; continue; }
+      guard.state = 'strike'; guard.timer = 17;
+      if (!onRoof(guard) || hero.hurt || !inFront(guard.face,dx,28)) continue;
+      if (hero.parry && inFront(hero.face,-dx,28)) {
+        guard.state = 'stunned'; guard.timer = 42;
+        dust(hero.x+hero.face*11,hero.y-16,'#b3fcdf',8);
+        say('Удар отражён! Ответь уколом — Shift.');
+      } else {
+        hero.hp--; showHealth();
+        if (!hero.hp) { respawn('Стражник победил.'); return; }
+        hero.hurt = 38; hero.thrust = 0; hero.vx = guard.face*3; flashing = 12;
+        dust(hero.x,hero.y-13,'#ffb08c',5);
+        say('Стражник попал. Держи ↑ для парирования.');
+      }
+    }
+  }
+  function move() {
+    if (climb()) return;
+    const dir = Number(held('right')) - Number(held('left'));
+    if (dir && !hero.thrust) hero.face = dir;
+    const speed = dir * (hero.parry || hero.thrust ? 1.55 : 3.05);
+    hero.vx += minmax(speed - hero.vx, -.68, .68);
+    if (hero.ground) hero.grace = 5;
+    if (jumpBuffer > 0 && hero.grace > 0) {
+      hero.vy = -6.15; hero.ground = false; hero.grace = 0; jumpBuffer = 0;
+      dust(hero.x, hero.y, '#d69d83', 5);
+    }
+    if (jumpBuffer > 0) jumpBuffer--;
+    if (hero.grace > 0) hero.grace--;
+    const prevX = hero.x, prevY = hero.y, wasGround = hero.ground;
+    hero.x = minmax(hero.x + hero.vx, 7, platforms.at(-1).end - 6);
+    hero.vy = Math.min(hero.vy + .36, 9);
+    hero.y += hero.vy;
+    const foot = 4;
+    hero.ground = false;
+    for (const p of platforms) {
+      if (hero.x+foot <= p.x || hero.x-foot >= p.end || hero.y < p.y) continue;
+      if (hero.vy >= 0 && prevY <= p.y) {
+        hero.y = p.y; hero.vy = 0; hero.ground = true;
+        if (!wasGround) dust(hero.x, hero.y, '#e9ad85', 5);
+        break;
+      }
+      if (p.deck && hero.y-23 >= p.y+7) continue;
+      if (prevX+foot <= p.x) { hero.x = p.x-foot; hero.vx = 0; }
+      else if (prevX-foot >= p.end) { hero.x = p.end+foot; hero.vx = 0; }
+    }
+    hero.stride += Math.abs(hero.vx);
+  }
+  function step() {
+    ticks++;
+    if (flashing > 0) flashing--;
+    for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += .10; p.life--; }
+    particles = particles.filter(p => p.life > 0);
+    if (won) return;
+    if (hero.regrab) hero.regrab--;
+    move();
+    if (hero.y > H+24) {
+      $('falls').textContent = String(++falls);
+      respawn('Срыв!');
+    }
+    combat();
+    if (!saved && hero.ground && Math.abs(hero.x - checkpoint.x) < 19) {
+      saved = true;
+      say('Контрольная точка: фонарь зажжён.');
+      dust(checkpoint.x, checkpoint.y-20, '#89f0d6', 8);
+    }
+    if (hero.ground && hero.x >= gate) {
+      won = true; clearInput();
+      $('result').hidden = false; $('again').focus();
+      say('Уровень пройден!');
+    }
+    camera += (minmax(hero.x - 145, 0, maxCamera) - camera) * .11;
+    updateProgress();
+  }
+
+  const sky = document.createElement('canvas');
+  sky.width = W; sky.height = H;
+  const sc = sky.getContext('2d');
+  function box(c, color, x, y, w, h) { c.fillStyle = color; c.fillRect(Math.floor(x), Math.floor(y), w, h); }
+  function fill(color, x, y, w, h) { box(ctx, color, x, y, w, h); }
+  function hash(n) { return ((Math.imul(n ^ (n >>> 15), 1597334677) >>> 0) % 1000) / 1000; }
+  function skyArt() {
+    const bands = ['#1a1937','#211d40','#292146','#31244b','#3c2851','#4a2e57','#58385e','#6a4465','#7a4e68'];
+    bands.forEach((color, i) => box(sc,color,0,i*26,W,26));
+    box(sc,bands.at(-1),0,234,W,36);
+    for (let i = 0; i < 106; i++) {
+      const x = hash(i*7+4)*W, y = 5+hash(i*13+9)*155;
+      box(sc, ['#6b6585','#8e7c9e','#c7a3ac','#e6c0b3'][i%4],x,y,1,1);
+    }
+    for (const [x,y] of [[75,48],[159,76],[219,32],[302,61],[441,57]]) {
+      box(sc,'#ab8ea7',x-2,y,5,1); box(sc,'#ab8ea7',x,y-2,1,5); box(sc,'#ffe0bc',x,y,1,1);
+    }
+    const moonX = 354, moonY = 74;
+    for (let y = -44; y <= 44; y++) for (let x = -44; x <= 44; x++) {
+      const distance = Math.hypot(x,y);
+      if (distance > 44) continue;
+      const color = distance < 19 ? (y < 7 ? '#ffe0af' : '#f6c292') :
+        distance < 25 ? '#ffbd9032' : distance < 34 ? '#ffbd9016' : '#ffbd9009';
+      box(sc,color,moonX+x,moonY+y,1,1);
+    }
+    for (const [x,y,w] of [[-7,-10,7],[3,-4,9],[-12,3,5],[-3,11,10]]) box(sc,'#eab385',moonX+x,moonY+y,w,2);
+    for (const [x,y,w] of [[84,103,73],[263,112,60],[298,119,47],[107,110,30],[398,102,69]]) {
+      box(sc,'#b080932f',x,y,w,2); box(sc,'#b080931c',x-11,y+3,w-8,1);
+    }
+  }
+  skyArt();
+  function city(cam, layer) {
+    const step = layer ? 42 : 31, offset = cam * (layer ? .29 : .12), base = layer ? 225 : 197;
+    const color = layer ? '#2b233f' : '#4b3454', edge = layer ? '#372b4b' : '#5f4060';
+    const first = Math.floor(offset / step);
+    for (let i = first-1; i <= first+Math.ceil(W/step)+1; i++) {
+      const x = i*step-offset, top = base-22-Math.floor(hash(i*9+layer*27)*40), w = step-5;
+      fill(color,x,top,w,H-top);
+      if (i%3 === 1) {
+        const mid = x+w/2;
+        for (let row = 0; row < 12; row++) {
+          const r = Math.min(row+1,8);
+          fill(color,mid-r,top-12+row,2*r,1);
+        }
+        fill(edge,mid,top-17,1,6);
+      } else if (i%3 === 0) {
+        fill(color,x+6,top-10,w-13,10);
+        fill(edge,x+5,top-10,w-11,1);
+      }
+      fill(edge,x,top,w,1);
+      for (let j = 5; j < w-1; j+=8) {
+        const y = top+9+Math.floor(hash(i*47+j)*10);
+        fill(hash(i*37+j) > .7 && layer ? '#966675' : edge,x+j,y,2,4);
+      }
+    }
+  }
+  function columns(cam) {
+    const stride = 161, offset = Math.floor(cam*.57);
+    const shape = [[0,97],[0,89],[5,78],[13,66],[26,52],[43,39],[61,29],[73,21],[79,14]];
+    for (let x = 4-offset%stride-stride; x < W+stride; x+=stride) {
+      fill('#241c36',x-6,0,14,184);
+      fill('#382742',x-5,57,2,118);
+      fill('#51334a',x+6,69,2,106);
+      for (const y of [73,106,145,176]) fill('#1b162b',x-6,y,14,2);
+      ctx.fillStyle = '#292039'; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+stride,0);
+      for (const [dx,y] of shape) ctx.lineTo(x+stride-dx,y);
+      for (const [dx,y] of [...shape].reverse()) ctx.lineTo(x+dx,y);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#63425b'; ctx.lineWidth = 2; ctx.beginPath();
+      shape.forEach(([dx,y],i) => i ? ctx.lineTo(x+dx,y) : ctx.moveTo(x,y));
+      [...shape].reverse().forEach(([dx,y]) => ctx.lineTo(x+stride-dx,y)); ctx.stroke();
+      fill('#4e344e',x-8,96,18,3); fill('#2e223b',x-8,99,18,5);
+    }
+  }
+  function tower(p, cam, index) {
+    const x = p.x-cam, w = p.end-p.x, y = p.y;
+    if (x>W || x+w<0) return;
+    if (p.deck) {
+      fill('#42304c',x,y,w,8); fill('#f0b894',x,y,w,1);
+      for (let n = 1; n < w-1; n+=10) fill('#aa7780',x+n,y+2,Math.min(9,w-n-1),3);
+      for (const dx of [4,w-8]) {
+        fill('#684759',x+dx,y+7,5,6); fill('#53384f',x+dx,y+13,3,4);
+      }
+      return;
+    }
+    fill('#3a2946',x,y,w,H-y);
+    fill('#201a2e',x+1,y+7,3,H-y-7);
+    fill('#241b34',x+w-4,y+7,4,H-y-7);
+    for (let row = 0; y+11+row*11 < H; row++) {
+      const by = y+11+row*11, offset = (row%2)*10;
+      for (let bx = offset-20; bx < w; bx+=20) {
+        const l = Math.max(bx,0), r = Math.min(bx+19,w), t = hash(index*999+row*99+bx);
+        if (r <= l) continue;
+        fill(t<.35 ? '#44314f' : t<.74 ? '#4e3653' : '#573b57',x+l,by,r-l,9);
+        if (row<3 && t>.3) fill('#67465e',x+l+1,by+1,Math.max(0,r-l-3),1);
+        if (t>.7 && r-l>9) fill('#33263f',x+l+5,by+5,4,1);
+      }
+    }
+    for (let n = 0; n < w; n+=13) {
+      const span = Math.min(12,w-n);
+      fill(n%3 ? '#ba877c' : '#c89682',x+n,y,span,2);
+      fill(n%3 ? '#856075' : '#9c6e79',x+n,y+2,span,4);
+    }
+    fill('#f0b894',x,y,w,1); fill('#291e36',x,y+7,w,3);
+    if (index % 2 === 0) {
+      const mid = x+Math.floor(w*.43);
+      fill('#291f38',mid-5,y+26,11,23);
+      fill('#221a31',mid-3,y+23,7,23);
+      fill('#715266',mid-6,y+49,13,2);
+    }
+  }
+  function lamp(x,y,teal) {
+    const flare = Math.floor(ticks/5)%3;
+    fill('#271e32',x-6,y-2,13,2);
+    fill('#755065',x-1,y-17,3,15);
+    fill(teal?'#76eacb22':'#ffab5225',x-12,y-36,25,26);
+    fill(teal?'#76eacb23':'#ffab5230',x-8,y-32,17,18);
+    fill('#713c5a',x-5,y-22,11,6); fill('#c78477',x-5,y-23,11,2);
+    fill(teal?'#43bdae':'#d3684e',x-3,y-29,7,6);
+    fill(teal?'#90f4d6':'#ffb867',x-2,y-30-flare,4,7+flare);
+    fill('#fff1b9',x,y-28,2,5);
+    fill(teal?'#aef4e0':'#efb486',x+(flare-1)*2,y-34-(ticks%8),1,1);
+  }
+  function doorway(x,y) {
+    for (let row = 0; row < 12; row++) fill('#bb877e',x-(7+row),y-47+row,15+row*2,1);
+    fill('#ba877d',x-18,y-35,37,35);
+    fill('#54374c',x-15,y-36,31,36);
+    for (let row = 0; row < 9; row++) fill('#282237',x-(4+row),y-43+row,9+row*2,1);
+    fill('#282237',x-12,y-34,25,34);
+    fill('#39354b',x-10,y-28,21,27);
+    fill('#545067',x-1,y-28,2,28);
+    for (const dx of [-8,7]) fill('#222235',x+dx,y-27,2,26);
+    fill('#f5ca95',x+4,y-12,2,2);
+  }
+  function ladderArt(ladder,cam) {
+    const x = ladder.x-cam;
+    if (x < -12 || x > W+12) return;
+    const {top,bottom} = ladder;
+    for (const dx of [-7,6]) {
+      fill('#4a3038',x+dx,top-4,4,bottom-top+4);
+      fill('#ab775e',x+dx,top-5,2,bottom-top+5);
+    }
+    for (let y = top+3; y < bottom; y+=7) {
+      fill('#674451',x-5,y+1,11,2); fill('#d69b71',x-6,y,13,1);
+    }
+  }
+  function sword(x,y,pose) {
+    if (pose === 'thrust') {
+      fill('#d2e1ea',x+3,y,19,1); fill('#f7fbff',x+10,y,12,1);
+      fill('#ab825d',x+3,y-2,1,5); fill('#ffd292',x,y,3,1);
+    } else {
+      const raised = pose === 'parry' || pose === 'windup';
+      const length = raised ? 15 : 10;
+      for (let i = 0; i < length; i++) {
+        const dx = raised ? (pose === 'parry' ? Math.floor(i/5) : -Math.floor(i/4)) : i;
+        fill('#c5dae8',x+dx,y-i,raised ? 2 : 1,1);
+      }
+      fill('#ffc885',x-2,y-1,5,1);
+    }
+  }
+  function guardArt(g,cam) {
+    if (!g.hp || g.x < cam-34 || g.x > cam+W+34) return;
+    const walk = g.state === 'patrol' ? Math.floor(g.x/3)%2 : 0;
+    ctx.save(); ctx.translate(Math.round(g.x-cam),g.y); ctx.scale(g.face,1);
+    fill('#251d36',-6,-16,12,11); fill('#398079',-5,-15,10,8);
+    fill('#76b4a1',-2,-15,6,5); fill('#264c58',-3,-7,4,7-walk);
+    fill('#467377',2,-7,4,6+walk); fill('#192438',-4,-2-walk,5,2); fill('#283448',2,-2+walk,5,2-walk);
+    fill('#ca9569',-5,-8,10,2);
+    fill('#162c3b',-5,-23,10,8); fill('#5f9f9b',-5,-23,9,3);
+    fill('#80cfbd',-3,-25,6,2); fill('#bd947f',0,-19,5,3);
+    fill('#28334a',3,-19,1,1); fill('#a9daca',-5,-20,3,5);
+    const striking = g.state === 'strike' && g.timer > 9;
+    fill('#539990',3,-13,striking ? 9 : 5,3);
+    sword(striking ? 10 : 7,-12,striking ? 'thrust' : g.state);
+    ctx.restore();
+    const x = Math.round(g.x-cam), y = g.y-33;
+    if (g.state === 'windup') {
+      fill('#392639',x-4,y-3,9,10); fill('#ffce83',x,y-2,2,5); fill('#ffedc5',x,y+4,2,2);
+    } else if (g.state === 'stunned') {
+      const i = Math.floor(ticks/4)%3;
+      fill('#d4f7b3',x-5+i,y+1,2,2); fill('#fbe7a0',x+4-i,y-2,2,2);
+    }
+  }
+  function boy(cam) {
+    const phase = Math.floor(hero.stride/6)%4;
+    const stride = Math.abs(hero.vx) > .3 || hero.ladder ? [-3,0,3,0][phase] : 0;
+    ctx.save(); ctx.translate(Math.round(hero.x-cam),Math.round(hero.y)); ctx.scale(hero.face,1);
+    const leg = (x,y,boot) => {
+      fill('#52384c',x-1,y-1,4,7); fill('#b69a90',x,y-1,2,5); fill(boot,x-1,y+4,5,2);
+    };
+    leg(-3-stride,hero.ground ? -6+(stride===0?0:-1) : -8,'#615060');
+    leg(1+stride,hero.ground ? -6 : -9,'#92716d');
+    fill('#251c2d',-5,-17,10,11); fill('#e8c8a0',-4,-16,7,8);
+    fill('#fff0bf',-1,-16,4,7); fill('#c7555b',-5,-10,10,3);
+    fill('#8b3c50',-7,-10,3,2);
+    fill('#c94b59',-9-(hero.vx*hero.face>1?2:0),-9-(hero.ground?0:3),4,2);
+    const stabbing = hero.thrust >= 8 && hero.thrust <= 13;
+    const arm = stabbing ? 6 : hero.ground ? Math.sign(stride) : 2;
+    fill('#dab197',2,-15,3+arm,5); fill('#f1c195',3+arm,-12,3,2);
+    if (hero.ladder) {
+      fill('#eeb291',-8,-22+stride,4,3); fill('#eeb291',5,-22-stride,4,3);
+    } else {
+      sword(hero.parry ? 8 : 6+arm,hero.parry ? -14 : -12,stabbing ? 'thrust' : hero.parry ? 'parry' : 'ready');
+    }
+    fill('#282035',-4,-24,8,8); fill('#382637',-5,-22,2,6);
+    fill('#e3a17e',-2,-22,6,5); fill('#ffd2a0',0,-22,4,4);
+    fill('#302332',2,-21,1,1); fill('#efb99c',-2,-20,2,2);
+    fill('#68414b',-3,-24,6,1); fill('#dc6c66',-4,-23,8,1);
+    ctx.restore();
+  }
+  function draw() {
+    const cam = Math.round(camera);
+    ctx.drawImage(sky,0,0);
+    city(cam,0); city(cam,1); columns(cam);
+    for (let i = 0; i < platforms.length; i++) tower(platforms[i],cam,i);
+    for (const ladder of ladders) ladderArt(ladder,cam);
+    for (const [x,y] of [[23,209],[275,149],[411,185],[568,212],[749,132],[854,211],[1082,195],[1244,209]])
+      if (x>cam-20 && x<cam+W+20) lamp(x-cam,y,false);
+    if (checkpoint.x>cam-20 && checkpoint.x<cam+W+20) lamp(checkpoint.x-cam,checkpoint.y,saved);
+    if (gate>cam-20 && gate<cam+W+20) doorway(gate+8-cam,209);
+    for (const guard of guards) guardArt(guard,cam);
+    for (const p of particles) fill(p.color,p.x-cam,p.y,2,1);
+    boy(cam);
+    if (flashing) fill(`rgba(255,202,161,${flashing/100})`,0,0,W,H);
+  }
+  let last = 0, accumulated = 0;
+  const frameTime = 1000/60;
+  function loop(time) {
+    if (last) accumulated += Math.min(time-last,100);
+    last = time;
+    while (accumulated >= frameTime) { step(); accumulated -= frameTime; }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  reset(); draw(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
